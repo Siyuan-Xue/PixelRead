@@ -1,0 +1,65 @@
+<?xml version="1.0" encoding="utf-8"?>
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+
+    <group
+        android:pivotX="54"
+        android:pivotY="54"
+        android:scaleX="0.78"
+        android:scaleY="0.78">
+
+    <!-- Muted cover visible behind the open pages. -->
+    <path
+        android:fillColor="#C96442"
+        android:pathData="M18,34L52,24L52,90L18,82Z" />
+    <path
+        android:fillColor="#D97757"
+        android:pathData="M56,24L90,34L90,82L56,90Z" />
+
+    <!-- Open page surfaces. -->
+    <path
+        android:fillColor="#FAF9F5"
+        android:pathData="M22,30L52,24L52,82L22,76Z" />
+    <path
+        android:fillColor="#F0EEE6"
+        android:pathData="M56,24L86,30L86,76L56,82Z" />
+
+    <!-- Quiet center fold. -->
+    <path
+        android:fillColor="#141413"
+        android:pathData="M52,24h4v62h-4z" />
+    <path
+        android:fillColor="#5E5D59"
+        android:pathData="M54,28h2v54h-2z" />
+
+    <!-- Subtle page depth. -->
+    <path
+        android:fillColor="#E3DACC"
+        android:pathData="M22,76L52,82L52,88L22,82Z" />
+    <path
+        android:fillColor="#E3DACC"
+        android:pathData="M56,82L86,76L86,82L56,88Z" />
+
+    <!-- A restrained bookmark keeps the reading cue without clutter. -->
+    <path
+        android:fillColor="#C96442"
+        android:pathData="M68,30h8v30l-4,-5l-4,5Z" />
+
+    <!-- Minimal text marks, aligned to the page perspective. -->
+    <path
+        android:fillColor="#73726C"
+        android:pathData="M30,42L44,39L44,42L30,45Z" />
+    <path
+        android:fillColor="#73726C"
+        android:pathData="M30,54L44,51L44,54L30,57Z" />
+    <path
+        android:fillColor="#73726C"
+        android:pathData="M64,39L78,42L78,45L64,42Z" />
+    <path
+        android:fillColor="#73726C"
+        android:pathData="M64,51L78,54L78,57L64,54Z" />
+    </group>
+</vector>
