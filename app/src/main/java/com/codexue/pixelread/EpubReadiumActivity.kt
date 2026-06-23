@@ -1,13 +1,18 @@
 package com.codexue.pixelread
 
 import android.content.Context
+import android.content.Intent
 import android.content.res.ColorStateList
+import android.graphics.Rect
 import android.graphics.Typeface
 import android.graphics.drawable.GradientDrawable
 import android.net.Uri
 import android.os.Bundle
+import android.text.TextUtils
 import android.util.TypedValue
+import android.view.GestureDetector
 import android.view.Gravity
+import android.view.MotionEvent
 import android.view.View
 import android.view.ViewGroup
 import android.widget.FrameLayout
@@ -16,6 +21,7 @@ import android.widget.ImageView
 import android.widget.LinearLayout
 import android.widget.SeekBar
 import android.widget.TextView
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.enableEdgeToEdge
 import androidx.fragment.app.FragmentActivity
 import androidx.lifecycle.lifecycleScope
@@ -40,11 +46,10 @@ class EpubReadiumActivity :
     private lateinit var statusPanel: LinearLayout
     private lateinit var statusText: TextView
     private lateinit var statusBadge: TextView
-    private lateinit var readerTools: LinearLayout
+    private lateinit var openBookButton: ImageButton
     private lateinit var themeToggleButton: ImageButton
-    private lateinit var fontLabel: TextView
+    private lateinit var fontIcon: ImageView
     private lateinit var fontSlider: SeekBar
-    private lateinit var navLabel: TextView
     private lateinit var readerShell: FrameLayout
     private lateinit var navigatorContainer: FrameLayout
     private lateinit var creditLabel: TextView
@@ -52,12 +57,30 @@ class EpubReadiumActivity :
     private val prefs by lazy { getSharedPreferences(ReaderPrefsName, Context.MODE_PRIVATE) }
     private var document: PixelReadiumEpubDocument? = null
     private var themeMode: ReaderThemeMode = ReaderThemeMode.DARK
-    private var fontIndex: Int = 2
+    private var fontIndex: Int = DEFAULT_EPUB_FONT_INDEX
     private var pageIndex: Int = 0
     private var pageCount: Int = 1
     private var chapterIndex: Int = 0
     private val textViews = mutableListOf<TextView>()
-    private val buttons = mutableListOf<TextView>()
+    private val dividers = mutableListOf<View>()
+    private val readerBounds = Rect()
+
+    private val openBookLauncher =
+        registerForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
+            if (uri != null) openSelectedBook(uri)
+        }
+
+    private val pageTapDetector by lazy {
+        GestureDetector(
+            this,
+            object : GestureDetector.SimpleOnGestureListener() {
+                override fun onSingleTapUp(event: MotionEvent): Boolean {
+                    handleReaderSideTap(event.rawX, event.rawY)
+                    return false
+                }
+            },
+        )
+    }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -78,15 +101,29 @@ class EpubReadiumActivity :
         super.onDestroy()
     }
 
+    override fun dispatchTouchEvent(event: MotionEvent): Boolean {
+        pageTapDetector.onTouchEvent(event)
+        return super.dispatchTouchEvent(event)
+    }
+
     private fun loadPrefs() {
         themeMode = enumValueOrDefault(prefs.getString("themeMode", null), ReaderThemeMode.DARK)
-        fontIndex = clampEpubFontIndex(prefs.getInt("epubFontIndex", 2))
+        val savedFontScaleVersion = prefs.getInt("epubFontScaleVersion", 0)
+        fontIndex = if (savedFontScaleVersion < EPUB_FONT_SCALE_VERSION) {
+            DEFAULT_EPUB_FONT_INDEX
+        } else {
+            clampEpubFontIndex(prefs.getInt("epubFontIndex", DEFAULT_EPUB_FONT_INDEX))
+        }
+        if (savedFontScaleVersion < EPUB_FONT_SCALE_VERSION) {
+            persist()
+        }
     }
 
     private fun persist() {
         prefs.edit()
             .putString("themeMode", themeMode.name)
             .putInt("epubFontIndex", fontIndex)
+            .putInt("epubFontScaleVersion", EPUB_FONT_SCALE_VERSION)
             .apply()
     }
 
@@ -110,24 +147,17 @@ class EpubReadiumActivity :
         statusPanel = LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL
             gravity = Gravity.CENTER_VERTICAL
-            setPadding(dp(8), dp(8), dp(8), dp(8))
+            setPadding(dp(8), dp(6), dp(8), dp(6))
         }
         statusText = label("OPENING EPUB", 12f, bold = true)
         statusBadge = badge("LOADING")
-        statusPanel.addView(statusText, LinearLayout.LayoutParams(0, dp(36), 1f))
-        statusPanel.addView(statusBadge, LinearLayout.LayoutParams(dp(220), dp(36)))
-        statusPanel.addView(button("BACK") { finish() }, LinearLayout.LayoutParams(dp(120), dp(36)).withLeftMargin(dp(6)))
-        root.addView(statusPanel, LinearLayout.LayoutParams(-1, dp(58)).withTopMargin(dp(8)))
-
-        readerTools = LinearLayout(this).apply {
-            orientation = LinearLayout.HORIZONTAL
-            gravity = Gravity.CENTER_VERTICAL
-            setPadding(dp(8), dp(4), dp(8), dp(4))
-        }
+        openBookButton = iconButton { openBookLauncher.launch(BOOK_OPEN_MIME_TYPES) }
         themeToggleButton = iconButton { toggleThemeMode() }
-        readerTools.addView(themeToggleButton, LinearLayout.LayoutParams(dp(44), dp(36)))
-        fontLabel = label("FONT ${epubFontSizeSp(fontIndex)}SP", 11f, bold = true)
-        readerTools.addView(fontLabel, LinearLayout.LayoutParams(dp(96), dp(36)).withLeftMargin(dp(10)))
+        fontIcon = ImageView(this).apply {
+            scaleType = ImageView.ScaleType.CENTER
+            setPadding(dp(8), dp(8), dp(8), dp(8))
+            contentDescription = "FONT SIZE"
+        }
         fontSlider = SeekBar(this).apply {
             max = EPUB_FONT_SIZES_SP.lastIndex
             progress = fontIndex
@@ -140,8 +170,15 @@ class EpubReadiumActivity :
                 override fun onStopTrackingTouch(seekBar: SeekBar?) = Unit
             })
         }
-        readerTools.addView(fontSlider, LinearLayout.LayoutParams(dp(220), dp(36)).withLeftMargin(dp(4)))
-        root.addView(readerTools, LinearLayout.LayoutParams(-1, dp(46)).withTopMargin(dp(8)))
+        statusPanel.addView(statusText, LinearLayout.LayoutParams(0, dp(44), 1f))
+        statusPanel.addView(statusBadge, LinearLayout.LayoutParams(statusBadgeWidth(), dp(44)).withLeftMargin(dp(6)))
+        statusPanel.addView(divider(), LinearLayout.LayoutParams(dp(1), dp(32)).withLeftMargin(dp(6)))
+        statusPanel.addView(openBookButton, LinearLayout.LayoutParams(dp(44), dp(44)).withLeftMargin(dp(6)))
+        statusPanel.addView(themeToggleButton, LinearLayout.LayoutParams(dp(44), dp(44)).withLeftMargin(dp(6)))
+        statusPanel.addView(divider(), LinearLayout.LayoutParams(dp(1), dp(32)).withLeftMargin(dp(6)))
+        statusPanel.addView(fontIcon, LinearLayout.LayoutParams(dp(44), dp(44)).withLeftMargin(dp(6)))
+        statusPanel.addView(fontSlider, LinearLayout.LayoutParams(fontSliderWidth(), dp(44)).withLeftMargin(dp(2)))
+        root.addView(statusPanel, LinearLayout.LayoutParams(-1, dp(58)).withTopMargin(dp(8)))
 
         readerShell = FrameLayout(this)
         navigatorContainer = FrameLayout(this).apply { id = View.generateViewId() }
@@ -151,22 +188,36 @@ class EpubReadiumActivity :
         )
         root.addView(readerShell, LinearLayout.LayoutParams(-1, 0, 1f).withTopMargin(dp(8)))
 
-        val nav = LinearLayout(this).apply {
-            orientation = LinearLayout.HORIZONTAL
-            setPadding(dp(6), dp(6), dp(6), dp(6))
-        }
-        nav.addView(button("PREV") { navigator()?.goBackward(animated = true) }, LinearLayout.LayoutParams(0, dp(40), 1f))
-        navLabel = badge("EPUB")
-        nav.addView(navLabel, LinearLayout.LayoutParams(0, dp(40), 1.6f).withLeftMargin(dp(6)))
-        nav.addView(button("NEXT") { navigator()?.goForward(animated = true) }, LinearLayout.LayoutParams(0, dp(40), 1f).withLeftMargin(dp(6)))
-        root.addView(nav, LinearLayout.LayoutParams(-1, dp(56)).withTopMargin(dp(8)))
-
         setContentView(root)
+    }
+
+    private fun openSelectedBook(uri: Uri) {
+        val fileName = contentResolver.displayName(uri)
+        val documentType = detectDocumentType(fileName, contentResolver.getType(uri))
+        when (documentType) {
+            ReaderDocumentType.EPUB -> {
+                persistReadPermission(uri)
+                open(uri)
+            }
+            ReaderDocumentType.PDF -> {
+                persistReadPermission(uri)
+                startActivity(Intent(this, PdfViewerActivity::class.java).apply {
+                    data = uri
+                    addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                })
+                finish()
+            }
+            null -> showError("UNSUPPORTED FILE")
+        }
     }
 
     private fun open(uri: Uri) {
         lifecycleScope.launch {
             try {
+                statusText.text = contentResolver.displayName(uri) ?: "SELECTED.EPUB"
+                statusBadge.text = "LOADING"
+                document?.close()
+                document = null
                 val opened = PixelReadiumEpubDocument.open(this@EpubReadiumActivity, uri)
                 document = opened
                 statusText.text = opened.fileName
@@ -188,7 +239,9 @@ class EpubReadiumActivity :
 
     private fun setFontIndex(index: Int) {
         fontIndex = clampEpubFontIndex(index)
-        fontLabel.text = "FONT ${epubFontSizeSp(fontIndex)}SP"
+        if (fontSlider.progress != fontIndex) {
+            fontSlider.progress = fontIndex
+        }
         persist()
         applyReaderSettings()
     }
@@ -240,8 +293,7 @@ class EpubReadiumActivity :
 
     private fun updateNavLabel() {
         val chapterCount = document?.chapterCount ?: 1
-        navLabel.text = epubPageStatusText(chapterIndex, chapterCount, pageIndex, pageCount)
-        statusBadge.text = navLabel.text
+        statusBadge.text = epubPageStatusText(chapterIndex, chapterCount, pageIndex, pageCount)
     }
 
     private fun applyTheme() {
@@ -252,25 +304,27 @@ class EpubReadiumActivity :
         textViews.forEach { it.setTextColor(tokens.text.toInt()) }
         creditLabel.setTextColor(tokens.primary.toInt())
         statusPanel.background = pixelBackground(tokens.surface.toInt(), tokens.outline.toInt(), strokeDp = 2)
+        dividers.forEach { it.setBackgroundColor(tokens.outline.toInt()) }
         readerShell.setBackgroundColor(background)
         navigatorContainer.setBackgroundColor(panel)
         navigatorContainer.foreground = pixelBorder(tokens.outline.toInt(), strokeDp = 2)
-        readerTools.background = pixelBackground(tokens.surface.toInt(), tokens.outline.toInt(), strokeDp = 2)
         updateControls()
     }
 
     private fun updateControls() {
         val tokens = readerThemeTokens(themeMode)
-        buttons.forEach { button ->
-            button.setTextColor(tokens.text.toInt())
-            button.background = pixelBackground(tokens.surface.toInt(), tokens.outline.toInt(), strokeDp = 2)
-        }
-        themeToggleButton.background = pixelBackground(tokens.panel.toInt(), tokens.outline.toInt(), strokeDp = 2)
+        openBookButton.background = pixelBackground(tokens.surface.toInt(), tokens.outline.toInt(), strokeDp = 2)
+        openBookButton.setImageResource(R.drawable.ic_reader_open_book)
+        openBookButton.setColorFilter(tokens.primary.toInt())
+        openBookButton.contentDescription = "OPEN BOOK"
+        themeToggleButton.background = pixelBackground(tokens.surface.toInt(), tokens.outline.toInt(), strokeDp = 2)
         themeToggleButton.setImageResource(
             if (themeMode == ReaderThemeMode.DARK) R.drawable.ic_reader_moon else R.drawable.ic_reader_sun,
         )
         themeToggleButton.setColorFilter(tokens.primary.toInt())
         themeToggleButton.contentDescription = "TOGGLE THEME"
+        fontIcon.setImageResource(R.drawable.ic_reader_font_size)
+        fontIcon.setColorFilter(tokens.primary.toInt())
         val progressTint = ColorStateList.valueOf(tokens.primary.toInt())
         val trackTint = ColorStateList.valueOf(tokens.outline.toInt())
         fontSlider.progressTintList = progressTint
@@ -291,6 +345,7 @@ class EpubReadiumActivity :
             if (bold) setTypeface(typeface, Typeface.BOLD)
             gravity = if (alignEnd) Gravity.CENTER_VERTICAL or Gravity.END else Gravity.CENTER_VERTICAL
             maxLines = 1
+            ellipsize = TextUtils.TruncateAt.END
             textViews += this
         }
 
@@ -299,11 +354,9 @@ class EpubReadiumActivity :
             gravity = Gravity.CENTER
         }
 
-    private fun button(text: String, onClick: () -> Unit): TextView =
-        badge(text).apply {
-            isClickable = true
-            buttons += this
-            setOnClickListener { onClick() }
+    private fun divider(): View =
+        View(this).apply {
+            dividers += this
         }
 
     private fun iconButton(onClick: () -> Unit): ImageButton =
@@ -333,14 +386,37 @@ class EpubReadiumActivity :
         (value * resources.displayMetrics.density).toInt()
 
     private fun screenPadding(): Int =
-        if (resources.configuration.screenWidthDp >= TabletWidthDp) dp(24) else dp(16)
+        dp(screenPaddingDp())
 
     private fun readerContentWidth(): Int =
-        if (resources.configuration.screenWidthDp >= TabletWidthDp) {
-            dp(TabletReaderMaxWidthDp)
-        } else {
-            ViewGroup.LayoutParams.MATCH_PARENT
+        ViewGroup.LayoutParams.MATCH_PARENT
+
+    private fun handleReaderSideTap(rawX: Float, rawY: Float) {
+        if (!navigatorContainer.getGlobalVisibleRect(readerBounds)) return
+        if (rawY < readerBounds.top || rawY > readerBounds.bottom) return
+        val localX = rawX - readerBounds.left
+        val leftLimit = readerBounds.width() * SideTapRatio
+        val rightLimit = readerBounds.width() * (1f - SideTapRatio)
+        when {
+            localX <= leftLimit -> navigator()?.goBackward(animated = true)
+            localX >= rightLimit -> navigator()?.goForward(animated = true)
         }
+    }
+
+    private fun screenPaddingDp(): Int =
+        if (resources.configuration.screenWidthDp >= TabletWidthDp) 24 else 16
+
+    private fun statusBadgeWidth(): Int =
+        if (resources.configuration.screenWidthDp < CompactTopBarWidthDp) dp(128) else dp(220)
+
+    private fun fontSliderWidth(): Int =
+        if (resources.configuration.screenWidthDp < CompactTopBarWidthDp) dp(88) else dp(164)
+
+    private fun persistReadPermission(uri: Uri) {
+        runCatching {
+            contentResolver.takePersistableUriPermission(uri, Intent.FLAG_GRANT_READ_URI_PERMISSION)
+        }
+    }
 
     private fun LinearLayout.LayoutParams.withTopMargin(value: Int) = apply { topMargin = value }
     private fun LinearLayout.LayoutParams.withLeftMargin(value: Int) = apply { leftMargin = value }
@@ -352,6 +428,7 @@ class EpubReadiumActivity :
         const val ReaderPrefsName = "pixelread_reader"
         const val ReadiumTag = "pixelread-epub-reader"
         const val TabletWidthDp = 900
-        const val TabletReaderMaxWidthDp = 860
+        const val CompactTopBarWidthDp = 600
+        const val SideTapRatio = 0.28f
     }
 }

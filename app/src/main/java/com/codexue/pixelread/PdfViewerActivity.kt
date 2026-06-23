@@ -1,10 +1,12 @@
 package com.codexue.pixelread
 
 import android.content.Context
+import android.content.Intent
 import android.graphics.Typeface
 import android.graphics.drawable.GradientDrawable
 import android.net.Uri
 import android.os.Bundle
+import android.text.TextUtils
 import android.util.Log
 import android.util.TypedValue
 import android.view.Gravity
@@ -15,6 +17,7 @@ import android.widget.ImageButton
 import android.widget.ImageView
 import android.widget.LinearLayout
 import android.widget.TextView
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.enableEdgeToEdge
 import androidx.fragment.app.FragmentActivity
 import androidx.lifecycle.lifecycleScope
@@ -25,7 +28,7 @@ class PdfViewerActivity : FragmentActivity() {
     private lateinit var statusPanel: LinearLayout
     private lateinit var statusText: TextView
     private lateinit var statusBadge: TextView
-    private lateinit var zoomBadge: TextView
+    private lateinit var openBookButton: ImageButton
     private lateinit var themeToggleButton: ImageButton
     private lateinit var viewerContainer: FrameLayout
     private lateinit var creditLabel: TextView
@@ -33,7 +36,12 @@ class PdfViewerActivity : FragmentActivity() {
     private val prefs by lazy { getSharedPreferences(ReaderPrefsName, Context.MODE_PRIVATE) }
     private var themeMode: ReaderThemeMode = ReaderThemeMode.DARK
     private val textViews = mutableListOf<TextView>()
-    private val buttons = mutableListOf<TextView>()
+    private val dividers = mutableListOf<View>()
+
+    private val openBookLauncher =
+        registerForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
+            if (uri != null) openSelectedBook(uri)
+        }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -70,17 +78,17 @@ class PdfViewerActivity : FragmentActivity() {
         statusPanel = LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL
             gravity = Gravity.CENTER_VERTICAL
-            setPadding(dp(8), dp(8), dp(8), dp(8))
+            setPadding(dp(8), dp(6), dp(8), dp(6))
         }
         statusText = label("OPENING PDF", 12f, bold = true)
         statusBadge = badge("LOADING")
-        zoomBadge = badge("ZOOM AUTO")
+        openBookButton = iconButton { openBookLauncher.launch(BOOK_OPEN_MIME_TYPES) }
         themeToggleButton = iconButton { toggleThemeMode() }
-        statusPanel.addView(statusText, LinearLayout.LayoutParams(0, dp(36), 1f))
-        statusPanel.addView(statusBadge, LinearLayout.LayoutParams(dp(140), dp(36)))
-        statusPanel.addView(zoomBadge, LinearLayout.LayoutParams(dp(124), dp(36)).withLeftMargin(dp(6)))
-        statusPanel.addView(themeToggleButton, LinearLayout.LayoutParams(dp(44), dp(36)).withLeftMargin(dp(6)))
-        statusPanel.addView(button("BACK") { finish() }, LinearLayout.LayoutParams(dp(104), dp(36)).withLeftMargin(dp(6)))
+        statusPanel.addView(statusText, LinearLayout.LayoutParams(0, dp(44), 1f))
+        statusPanel.addView(statusBadge, LinearLayout.LayoutParams(statusBadgeWidth(), dp(44)).withLeftMargin(dp(6)))
+        statusPanel.addView(divider(), LinearLayout.LayoutParams(dp(1), dp(32)).withLeftMargin(dp(6)))
+        statusPanel.addView(openBookButton, LinearLayout.LayoutParams(dp(44), dp(44)).withLeftMargin(dp(6)))
+        statusPanel.addView(themeToggleButton, LinearLayout.LayoutParams(dp(44), dp(44)).withLeftMargin(dp(6)))
         root.addView(statusPanel, LinearLayout.LayoutParams(-1, dp(58)).withTopMargin(dp(8)))
 
         viewerContainer = FrameLayout(this).apply { id = View.generateViewId() }
@@ -89,8 +97,29 @@ class PdfViewerActivity : FragmentActivity() {
         setContentView(root)
     }
 
+    private fun openSelectedBook(uri: Uri) {
+        val fileName = contentResolver.displayName(uri)
+        val documentType = detectDocumentType(fileName, contentResolver.getType(uri))
+        when (documentType) {
+            ReaderDocumentType.PDF -> {
+                persistReadPermission(uri)
+                open(uri)
+            }
+            ReaderDocumentType.EPUB -> {
+                persistReadPermission(uri)
+                startActivity(Intent(this, EpubReadiumActivity::class.java).apply {
+                    data = uri
+                    addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                })
+                finish()
+            }
+            null -> showError("UNSUPPORTED FILE")
+        }
+    }
+
     private fun open(uri: Uri) {
         statusText.text = contentResolver.displayName(uri) ?: "SELECTED.PDF"
+        statusBadge.text = "LOADING"
         attachViewer(uri)
         lifecycleScope.launch {
             try {
@@ -129,6 +158,7 @@ class PdfViewerActivity : FragmentActivity() {
         textViews.forEach { it.setTextColor(tokens.text.toInt()) }
         creditLabel.setTextColor(tokens.primary.toInt())
         statusPanel.background = pixelBackground(tokens.surface.toInt(), tokens.outline.toInt(), strokeDp = 2)
+        dividers.forEach { it.setBackgroundColor(tokens.outline.toInt()) }
         viewerContainer.setBackgroundColor(tokens.panel.toInt())
         viewerContainer.foreground = pixelBorder(tokens.outline.toInt(), strokeDp = 2)
         updateControls()
@@ -136,10 +166,10 @@ class PdfViewerActivity : FragmentActivity() {
 
     private fun updateControls() {
         val tokens = readerThemeTokens(themeMode)
-        buttons.forEach { button ->
-            button.setTextColor(tokens.text.toInt())
-            button.background = pixelBackground(tokens.surface.toInt(), tokens.outline.toInt(), strokeDp = 2)
-        }
+        openBookButton.background = pixelBackground(tokens.surface.toInt(), tokens.outline.toInt(), strokeDp = 2)
+        openBookButton.setImageResource(R.drawable.ic_reader_open_book)
+        openBookButton.setColorFilter(tokens.primary.toInt())
+        openBookButton.contentDescription = "OPEN BOOK"
         themeToggleButton.background = pixelBackground(tokens.surface.toInt(), tokens.outline.toInt(), strokeDp = 2)
         themeToggleButton.setImageResource(
             if (themeMode == ReaderThemeMode.DARK) R.drawable.ic_reader_moon else R.drawable.ic_reader_sun,
@@ -161,19 +191,18 @@ class PdfViewerActivity : FragmentActivity() {
             if (bold) setTypeface(typeface, Typeface.BOLD)
             gravity = if (alignEnd) Gravity.CENTER_VERTICAL or Gravity.END else Gravity.CENTER_VERTICAL
             maxLines = 1
+            ellipsize = TextUtils.TruncateAt.END
             textViews += this
+        }
+
+    private fun divider(): View =
+        View(this).apply {
+            dividers += this
         }
 
     private fun badge(text: String): TextView =
         label(text, 11f, bold = true).apply {
             gravity = Gravity.CENTER
-        }
-
-    private fun button(text: String, onClick: () -> Unit): TextView =
-        badge(text).apply {
-            isClickable = true
-            buttons += this
-            setOnClickListener { onClick() }
         }
 
     private fun iconButton(onClick: () -> Unit): ImageButton =
@@ -205,6 +234,15 @@ class PdfViewerActivity : FragmentActivity() {
     private fun screenPadding(): Int =
         if (resources.configuration.screenWidthDp >= TabletWidthDp) dp(24) else dp(16)
 
+    private fun statusBadgeWidth(): Int =
+        if (resources.configuration.screenWidthDp < CompactTopBarWidthDp) dp(104) else dp(140)
+
+    private fun persistReadPermission(uri: Uri) {
+        runCatching {
+            contentResolver.takePersistableUriPermission(uri, Intent.FLAG_GRANT_READ_URI_PERMISSION)
+        }
+    }
+
     private fun LinearLayout.LayoutParams.withTopMargin(value: Int) = apply { topMargin = value }
     private fun LinearLayout.LayoutParams.withLeftMargin(value: Int) = apply { leftMargin = value }
 
@@ -219,5 +257,6 @@ class PdfViewerActivity : FragmentActivity() {
         const val PdfTag = "pixelread-pdf-reader"
         const val PdfLogTag = "PixelRead"
         const val TabletWidthDp = 900
+        const val CompactTopBarWidthDp = 600
     }
 }

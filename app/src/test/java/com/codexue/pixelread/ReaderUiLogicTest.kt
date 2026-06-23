@@ -16,16 +16,17 @@ class ReaderUiLogicTest {
 
     @Test
     fun epubFontSizeSp_usesFiveStableSteps() {
-        assertEquals(14, epubFontSizeSp(-10))
-        assertEquals(18, epubFontSizeSp(2))
-        assertEquals(22, epubFontSizeSp(99))
+        assertEquals(26, epubFontSizeSp(-10))
+        assertEquals(30, epubFontSizeSp(2))
+        assertEquals(34, epubFontSizeSp(99))
+        assertEquals(30, epubFontSizeSp(DEFAULT_EPUB_FONT_INDEX))
     }
 
     @Test
     fun readiumFontScale_mapsPixelReadStepsToReadiumScale() {
-        assertEquals(0.875, readiumFontScaleForEpubIndex(0), 0.001)
-        assertEquals(1.125, readiumFontScaleForEpubIndex(2), 0.001)
-        assertEquals(1.375, readiumFontScaleForEpubIndex(4), 0.001)
+        assertEquals(1.625, readiumFontScaleForEpubIndex(0), 0.001)
+        assertEquals(1.875, readiumFontScaleForEpubIndex(2), 0.001)
+        assertEquals(2.125, readiumFontScaleForEpubIndex(4), 0.001)
     }
 
     @Test

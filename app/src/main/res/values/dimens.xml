@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <dimen name="pdf_horizontal_page_spacing">0dp</dimen>
+    <dimen name="pdf_vertical_page_spacing">0dp</dimen>
+    <dimen name="top_page_margin">0dp</dimen>
+</resources>

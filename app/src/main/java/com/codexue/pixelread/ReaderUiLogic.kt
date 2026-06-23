@@ -1,6 +1,14 @@
 package com.codexue.pixelread
 
-val EPUB_FONT_SIZES_SP = listOf(14, 16, 18, 20, 22)
+val EPUB_FONT_SIZES_SP = listOf(26, 28, 30, 32, 34)
+const val DEFAULT_EPUB_FONT_INDEX = 2
+const val EPUB_FONT_SCALE_VERSION = 3
+val BOOK_OPEN_MIME_TYPES = arrayOf(
+    "application/pdf",
+    "application/epub+zip",
+    "application/x-epub+zip",
+    "application/octet-stream",
+)
 
 enum class ReaderDocumentType(val label: String) {
     PDF("PDF"),
