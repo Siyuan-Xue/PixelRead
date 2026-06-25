@@ -9,7 +9,7 @@ Developer identity: CODEX & XUE.
 - Open a local PDF or EPUB through the Android system file picker
 - Read PDF files in continuous scroll mode with the AndroidX PDF Viewer for high-fidelity layout, images, and pinch zoom
 - Read reflowable EPUB files with Readium in single-page mode
-- Adjust EPUB text with five font-size steps
+- Adjust EPUB text with 14sp-34sp font-size steps at 2sp intervals
 - Switch between dark and light reading themes based on the project color tokens
 - View short empty, loading, and error states
 
@@ -35,13 +35,13 @@ From the project root:
 The debug APK is copied to:
 
 ```text
-app/build/outputs/apk/debug/PixelRead-0.2.1-debug.apk
+app/build/outputs/apk/debug/PixelRead-0.2.2-debug.apk
 ```
 
 ## Install With ADB
 
 ```powershell
-adb install -r app/build/outputs/apk/debug/PixelRead-0.2.1-debug.apk
+adb install -r app/build/outputs/apk/debug/PixelRead-0.2.2-debug.apk
 ```
 
 ## Status

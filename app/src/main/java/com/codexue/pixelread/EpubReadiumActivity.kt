@@ -144,8 +144,9 @@ class EpubReadiumActivity :
         header.addView(creditLabel, LinearLayout.LayoutParams(dp(180), dp(34)))
         root.addView(header)
 
+        val compactTopBar = resources.configuration.screenWidthDp < CompactTopBarWidthDp
         statusPanel = LinearLayout(this).apply {
-            orientation = LinearLayout.HORIZONTAL
+            orientation = if (compactTopBar) LinearLayout.VERTICAL else LinearLayout.HORIZONTAL
             gravity = Gravity.CENTER_VERTICAL
             setPadding(dp(8), dp(6), dp(8), dp(6))
         }
@@ -170,15 +171,45 @@ class EpubReadiumActivity :
                 override fun onStopTrackingTouch(seekBar: SeekBar?) = Unit
             })
         }
-        statusPanel.addView(statusText, LinearLayout.LayoutParams(0, dp(44), 1f))
-        statusPanel.addView(statusBadge, LinearLayout.LayoutParams(statusBadgeWidth(), dp(44)).withLeftMargin(dp(6)))
-        statusPanel.addView(divider(), LinearLayout.LayoutParams(dp(1), dp(32)).withLeftMargin(dp(6)))
-        statusPanel.addView(openBookButton, LinearLayout.LayoutParams(dp(44), dp(44)).withLeftMargin(dp(6)))
-        statusPanel.addView(themeToggleButton, LinearLayout.LayoutParams(dp(44), dp(44)).withLeftMargin(dp(6)))
-        statusPanel.addView(divider(), LinearLayout.LayoutParams(dp(1), dp(32)).withLeftMargin(dp(6)))
-        statusPanel.addView(fontIcon, LinearLayout.LayoutParams(dp(44), dp(44)).withLeftMargin(dp(6)))
-        statusPanel.addView(fontSlider, LinearLayout.LayoutParams(fontSliderWidth(), dp(44)).withLeftMargin(dp(2)))
-        root.addView(statusPanel, LinearLayout.LayoutParams(-1, dp(58)).withTopMargin(dp(8)))
+        if (compactTopBar) {
+            val infoRow = LinearLayout(this).apply {
+                orientation = LinearLayout.HORIZONTAL
+                gravity = Gravity.CENTER_VERTICAL
+            }
+            infoRow.addView(statusText, LinearLayout.LayoutParams(0, dp(44), 1f))
+            infoRow.addView(statusBadge, LinearLayout.LayoutParams(statusBadgeWidth(), dp(44)).withLeftMargin(dp(6)))
+            infoRow.addView(openBookButton, LinearLayout.LayoutParams(dp(44), dp(44)).withLeftMargin(dp(6)))
+            infoRow.addView(themeToggleButton, LinearLayout.LayoutParams(dp(44), dp(44)).withLeftMargin(dp(6)))
+            statusPanel.addView(infoRow, LinearLayout.LayoutParams(-1, dp(44)))
+
+            val fontRow = LinearLayout(this).apply {
+                orientation = LinearLayout.HORIZONTAL
+                gravity = Gravity.CENTER_VERTICAL
+            }
+            fontRow.addView(fontIcon, LinearLayout.LayoutParams(dp(44), dp(44)))
+            fontRow.addView(
+                fontSlider,
+                LinearLayout.LayoutParams(0, dp(44), 1f)
+                    .withLeftMargin(dp(8))
+                    .withRightMargin(dp(8)),
+            )
+            statusPanel.addView(fontRow, LinearLayout.LayoutParams(-1, dp(44)).withTopMargin(dp(4)))
+        } else {
+            statusPanel.addView(statusText, LinearLayout.LayoutParams(0, dp(44), 1f))
+            statusPanel.addView(statusBadge, LinearLayout.LayoutParams(statusBadgeWidth(), dp(44)).withLeftMargin(dp(6)))
+            statusPanel.addView(divider(), LinearLayout.LayoutParams(dp(1), dp(32)).withLeftMargin(dp(6)))
+            statusPanel.addView(openBookButton, LinearLayout.LayoutParams(dp(44), dp(44)).withLeftMargin(dp(6)))
+            statusPanel.addView(themeToggleButton, LinearLayout.LayoutParams(dp(44), dp(44)).withLeftMargin(dp(6)))
+            statusPanel.addView(divider(), LinearLayout.LayoutParams(dp(1), dp(32)).withLeftMargin(dp(6)))
+            statusPanel.addView(fontIcon, LinearLayout.LayoutParams(dp(44), dp(44)).withLeftMargin(dp(6)))
+            statusPanel.addView(
+                fontSlider,
+                LinearLayout.LayoutParams(fontSliderWidth(), dp(44))
+                    .withLeftMargin(dp(2))
+                    .withRightMargin(dp(8)),
+            )
+        }
+        root.addView(statusPanel, LinearLayout.LayoutParams(-1, statusPanelHeight()).withTopMargin(dp(8)))
 
         readerShell = FrameLayout(this)
         navigatorContainer = FrameLayout(this).apply { id = View.generateViewId() }
@@ -407,10 +438,13 @@ class EpubReadiumActivity :
         if (resources.configuration.screenWidthDp >= TabletWidthDp) 24 else 16
 
     private fun statusBadgeWidth(): Int =
-        if (resources.configuration.screenWidthDp < CompactTopBarWidthDp) dp(128) else dp(220)
+        if (resources.configuration.screenWidthDp < CompactTopBarWidthDp) dp(112) else dp(220)
+
+    private fun statusPanelHeight(): Int =
+        if (resources.configuration.screenWidthDp < CompactTopBarWidthDp) dp(104) else dp(58)
 
     private fun fontSliderWidth(): Int =
-        if (resources.configuration.screenWidthDp < CompactTopBarWidthDp) dp(88) else dp(164)
+        if (resources.configuration.screenWidthDp >= TabletWidthDp) dp(280) else dp(232)
 
     private fun persistReadPermission(uri: Uri) {
         runCatching {
@@ -420,6 +454,7 @@ class EpubReadiumActivity :
 
     private fun LinearLayout.LayoutParams.withTopMargin(value: Int) = apply { topMargin = value }
     private fun LinearLayout.LayoutParams.withLeftMargin(value: Int) = apply { leftMargin = value }
+    private fun LinearLayout.LayoutParams.withRightMargin(value: Int) = apply { rightMargin = value }
 
     private inline fun <reified T : Enum<T>> enumValueOrDefault(value: String?, default: T): T =
         enumValues<T>().firstOrNull { it.name == value } ?: default
@@ -428,7 +463,7 @@ class EpubReadiumActivity :
         const val ReaderPrefsName = "pixelread_reader"
         const val ReadiumTag = "pixelread-epub-reader"
         const val TabletWidthDp = 900
-        const val CompactTopBarWidthDp = 600
+        const val CompactTopBarWidthDp = 720
         const val SideTapRatio = 0.28f
     }
 }
