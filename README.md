@@ -11,6 +11,8 @@ Developer identity: CODEX & XUE.
 - Read reflowable EPUB files with Readium in single-page mode
 - Adjust EPUB text with 14sp-34sp font-size steps at 2sp intervals
 - Switch between dark and light reading themes based on the project color tokens
+- Keep reader controls in a collapsible top drawer
+- Resume recent PDF and EPUB books from the empty home screen
 - View short empty, loading, and error states
 
 ## Tech Stack
@@ -35,13 +37,13 @@ From the project root:
 The debug APK is copied to:
 
 ```text
-app/build/outputs/apk/debug/PixelRead-0.2.2-debug.apk
+app/build/outputs/apk/debug/PixelRead-0.3.0-debug.apk
 ```
 
 ## Install With ADB
 
 ```powershell
-adb install -r app/build/outputs/apk/debug/PixelRead-0.2.2-debug.apk
+adb install -r app/build/outputs/apk/debug/PixelRead-0.3.0-debug.apk
 ```
 
 ## Status

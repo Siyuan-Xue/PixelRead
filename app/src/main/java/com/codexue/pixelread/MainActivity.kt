@@ -15,6 +15,9 @@ import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsPressedAsState
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.Icon
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -25,6 +28,8 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.sizeIn
 import androidx.compose.foundation.layout.systemBarsPadding
+import androidx.compose.foundation.layout.widthIn
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -36,9 +41,12 @@ import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
+import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.RectangleShape
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
@@ -61,7 +69,6 @@ import com.codexue.pixelread.ui.theme.PixelError
 import com.codexue.pixelread.ui.theme.PixelReadTheme
 
 private const val DeveloperCredit = "CODEX & XUE"
-private const val ReaderPrefsName = "pixelread_reader"
 
 private data class HomePalette(
     val background: Color,
@@ -74,33 +81,68 @@ private data class HomePalette(
 )
 
 class MainActivity : ComponentActivity() {
+    private var resumeVersion by mutableIntStateOf(0)
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
         setContent {
+            val refreshKey = resumeVersion
             PixelReadTheme {
                 Surface(
                     modifier = Modifier.fillMaxSize(),
                     color = MaterialTheme.colorScheme.background,
                 ) {
-                    PixelReadHome()
+                    PixelReadHome(refreshKey = refreshKey)
                 }
             }
         }
     }
+
+    override fun onResume() {
+        super.onResume()
+        resumeVersion += 1
+    }
 }
 
 @Composable
-private fun PixelReadHome(modifier: Modifier = Modifier) {
+private fun PixelReadHome(
+    refreshKey: Int,
+    modifier: Modifier = Modifier,
+) {
     val context = LocalContext.current
-    val prefs = remember { context.getSharedPreferences(ReaderPrefsName, Context.MODE_PRIVATE) }
-    var statusText by remember { mutableStateOf("SELECT A PDF OR EPUB") }
-    var statusBadge by remember { mutableStateOf("NO FILE") }
+    val prefs = remember { context.getSharedPreferences(READER_PREFS_NAME, Context.MODE_PRIVATE) }
+    var statusText by remember { mutableStateOf("SELECT OR RESUME") }
+    var recentBooks by remember(refreshKey) { mutableStateOf(prefs.loadRecentBooks()) }
     val themeMode = enumValueOrDefault(
         prefs.getString("themeMode", null),
         ReaderThemeMode.DARK,
     )
     val palette = homePalette(themeMode)
+    fun canOpen(uri: Uri): Boolean =
+        runCatching {
+            context.contentResolver.openFileDescriptor(uri, "r")?.use { true } == true
+        }.getOrDefault(false)
+
+    fun startReader(uri: Uri, documentType: ReaderDocumentType, recentBook: RecentBookEntry? = null) {
+        val intentClass = when (documentType) {
+            ReaderDocumentType.PDF -> PdfViewerActivity::class.java
+            ReaderDocumentType.EPUB -> EpubReadiumActivity::class.java
+        }
+        context.startActivity(
+            Intent(context, intentClass).apply {
+                data = uri
+                addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                if (documentType == ReaderDocumentType.PDF && recentBook != null) {
+                    putExtra(EXTRA_INITIAL_PDF_PAGE_INDEX, recentBook.pdfPageIndex)
+                }
+                if (documentType == ReaderDocumentType.EPUB && recentBook?.epubLocatorJson != null) {
+                    putExtra(EXTRA_INITIAL_EPUB_LOCATOR_JSON, recentBook.epubLocatorJson)
+                }
+            },
+        )
+    }
+
     val latestOpenDocument by rememberUpdatedState<(Uri) -> Unit> { uri ->
         val resolver = context.contentResolver
         val displayName = resolver.displayName(uri)
@@ -109,29 +151,18 @@ private fun PixelReadHome(modifier: Modifier = Modifier) {
                 runCatching {
                     resolver.takePersistableUriPermission(uri, Intent.FLAG_GRANT_READ_URI_PERMISSION)
                 }
-                context.startActivity(
-                    Intent(context, PdfViewerActivity::class.java).apply {
-                        data = uri
-                        addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
-                    },
-                )
+                startReader(uri, ReaderDocumentType.PDF)
             }
 
             ReaderDocumentType.EPUB -> {
                 runCatching {
                     resolver.takePersistableUriPermission(uri, Intent.FLAG_GRANT_READ_URI_PERMISSION)
                 }
-                context.startActivity(
-                    Intent(context, EpubReadiumActivity::class.java).apply {
-                        data = uri
-                        addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
-                    },
-                )
+                startReader(uri, ReaderDocumentType.EPUB)
             }
 
             null -> {
                 statusText = "UNSUPPORTED FILE"
-                statusBadge = "ERROR"
             }
         }
     }
@@ -146,20 +177,26 @@ private fun PixelReadHome(modifier: Modifier = Modifier) {
 
     val openBook = {
         openBookLauncher.launch(
-            arrayOf(
-                "application/pdf",
-                "application/epub+zip",
-                "application/x-epub+zip",
-                "application/octet-stream",
-            ),
+            BOOK_OPEN_MIME_TYPES,
         )
+    }
+
+    val openRecentBook: (RecentBookEntry) -> Unit = { entry ->
+        val uri = Uri.parse(entry.uri)
+        if (canOpen(uri)) {
+            startReader(uri, entry.documentType, entry)
+        } else {
+            statusText = "BOOK UNAVAILABLE"
+            recentBooks = prefs.loadRecentBooks()
+        }
     }
 
     PixelReadHomeScreen(
         statusText = statusText,
-        statusBadge = statusBadge,
+        recentBooks = recentBooks,
         palette = palette,
         onOpenBook = openBook,
+        onOpenRecentBook = openRecentBook,
         modifier = modifier,
     )
 }
@@ -167,9 +204,10 @@ private fun PixelReadHome(modifier: Modifier = Modifier) {
 @Composable
 private fun PixelReadHomeScreen(
     statusText: String,
-    statusBadge: String,
+    recentBooks: List<RecentBookEntry>,
     palette: HomePalette,
     onOpenBook: () -> Unit,
+    onOpenRecentBook: (RecentBookEntry) -> Unit,
     modifier: Modifier = Modifier,
 ) {
     Column(
@@ -177,15 +215,12 @@ private fun PixelReadHomeScreen(
             .fillMaxSize()
             .background(palette.background)
             .systemBarsPadding()
-            .padding(horizontal = 16.dp, vertical = 14.dp),
-        verticalArrangement = Arrangement.spacedBy(12.dp),
+            .padding(start = 16.dp, top = 10.dp, end = 16.dp, bottom = 0.dp),
+        verticalArrangement = Arrangement.spacedBy(8.dp),
     ) {
-        PixelReadHeader(palette = palette)
         ReaderStatusBar(
             statusText = statusText,
-            statusBadge = statusBadge,
             palette = palette,
-            onOpenBook = onOpenBook,
         )
         Box(
             modifier = Modifier
@@ -197,6 +232,10 @@ private fun PixelReadHomeScreen(
             contentAlignment = Alignment.Center,
         ) {
             Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .widthIn(max = 520.dp)
+                    .verticalScroll(rememberScrollState()),
                 horizontalAlignment = Alignment.CenterHorizontally,
                 verticalArrangement = Arrangement.spacedBy(12.dp),
             ) {
@@ -210,12 +249,12 @@ private fun PixelReadHomeScreen(
                     maxLines = 1,
                 )
                 Text(
-                    text = "Open a local PDF or EPUB.",
+                    text = "Open a new book or continue recent reading.",
                     color = palette.muted,
                     fontFamily = FontFamily.Monospace,
                     fontSize = 13.sp,
                     letterSpacing = 0.sp,
-                    maxLines = 1,
+                    maxLines = 2,
                     overflow = TextOverflow.Ellipsis,
                     textAlign = TextAlign.Center,
                 )
@@ -226,26 +265,36 @@ private fun PixelReadHomeScreen(
                     modifier = Modifier.sizeIn(minWidth = 184.dp),
                     large = true,
                 )
+                if (recentBooks.isNotEmpty()) {
+                    RecentBooksList(
+                        recentBooks = recentBooks,
+                        palette = palette,
+                        onOpenRecentBook = onOpenRecentBook,
+                    )
+                }
             }
         }
+        PixelReadFooter(palette = palette)
     }
 }
 
 @Composable
-private fun PixelReadHeader(
+private fun PixelReadFooter(
     palette: HomePalette,
     modifier: Modifier = Modifier,
 ) {
     Row(
-        modifier = modifier.fillMaxWidth(),
-        horizontalArrangement = Arrangement.SpaceBetween,
+        modifier = modifier
+            .fillMaxWidth()
+            .height(14.dp),
+        horizontalArrangement = Arrangement.spacedBy(12.dp, Alignment.CenterHorizontally),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Text(
             text = "PIXELREAD",
             color = palette.text,
             fontFamily = FontFamily.Monospace,
-            fontSize = 18.sp,
+            fontSize = 10.sp,
             fontWeight = FontWeight.Bold,
             letterSpacing = 0.sp,
             maxLines = 1,
@@ -254,7 +303,7 @@ private fun PixelReadHeader(
             text = DeveloperCredit,
             color = palette.primary,
             fontFamily = FontFamily.Monospace,
-            fontSize = 13.sp,
+            fontSize = 8.sp,
             fontWeight = FontWeight.SemiBold,
             letterSpacing = 0.sp,
             maxLines = 1,
@@ -267,9 +316,7 @@ private fun PixelReadHeader(
 @Composable
 private fun ReaderStatusBar(
     statusText: String,
-    statusBadge: String,
     palette: HomePalette,
-    onOpenBook: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     Row(
@@ -283,7 +330,11 @@ private fun ReaderStatusBar(
     ) {
         Text(
             text = statusText,
-            color = if (statusBadge == "ERROR") PixelError else palette.text,
+            color = if (statusText == "UNSUPPORTED FILE" || statusText == "BOOK UNAVAILABLE") {
+                PixelError
+            } else {
+                palette.text
+            },
             fontFamily = FontFamily.Monospace,
             fontSize = 13.sp,
             fontWeight = FontWeight.Bold,
@@ -292,36 +343,143 @@ private fun ReaderStatusBar(
             overflow = TextOverflow.Ellipsis,
             modifier = Modifier.weight(1f),
         )
-        PixelBadge(label = statusBadge, palette = palette)
-        PixelButton(label = "OPEN BOOK", onClick = onOpenBook, palette = palette)
+        PixelDrawerToggleButton(
+            expanded = false,
+            enabled = false,
+            palette = palette,
+            onClick = {},
+        )
     }
 }
 
 @Composable
-private fun PixelBadge(
-    label: String,
+private fun RecentBooksList(
+    recentBooks: List<RecentBookEntry>,
     palette: HomePalette,
     modifier: Modifier = Modifier,
+    onOpenRecentBook: (RecentBookEntry) -> Unit,
 ) {
-    Box(
+    Column(
         modifier = modifier
-            .height(36.dp)
-            .sizeIn(minWidth = 92.dp)
-            .background(palette.panel, RectangleShape)
-            .border(BorderStroke(1.dp, palette.outline), RectangleShape)
-            .padding(horizontal = 8.dp),
-        contentAlignment = Alignment.Center,
+            .fillMaxWidth()
+            .padding(top = 4.dp),
+        verticalArrangement = Arrangement.spacedBy(8.dp),
     ) {
         Text(
-            text = label,
-            color = palette.text,
+            text = "RECENT",
+            color = palette.muted,
+            fontFamily = FontFamily.Monospace,
+            fontSize = 12.sp,
+            fontWeight = FontWeight.Bold,
+            letterSpacing = 0.sp,
+            maxLines = 1,
+            modifier = Modifier.fillMaxWidth(),
+        )
+        recentBooks.forEach { recentBook ->
+            RecentBookRow(
+                recentBook = recentBook,
+                palette = palette,
+                onClick = { onOpenRecentBook(recentBook) },
+            )
+        }
+    }
+}
+
+@Composable
+private fun RecentBookRow(
+    recentBook: RecentBookEntry,
+    palette: HomePalette,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    val interactionSource = remember { MutableInteractionSource() }
+    val pressed by interactionSource.collectIsPressedAsState()
+    Row(
+        modifier = modifier
+            .fillMaxWidth()
+            .height(48.dp)
+            .background(if (pressed) palette.surface else palette.panel, RectangleShape)
+            .border(BorderStroke(1.dp, palette.outline), RectangleShape)
+            .clickable(
+                interactionSource = interactionSource,
+                indication = null,
+                onClick = onClick,
+            )
+            .padding(horizontal = 10.dp),
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Column(modifier = Modifier.weight(1f)) {
+            Text(
+                text = recentBook.title,
+                color = palette.text,
+                fontFamily = FontFamily.Monospace,
+                fontSize = 14.sp,
+                fontWeight = FontWeight.Bold,
+                letterSpacing = 0.sp,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
+            Text(
+                text = recentBook.progressLabel.ifBlank { recentBook.documentType.label },
+                color = palette.muted,
+                fontFamily = FontFamily.Monospace,
+                fontSize = 11.sp,
+                letterSpacing = 0.sp,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
+        }
+        Text(
+            text = recentBook.documentType.label,
+            color = palette.primary,
             fontFamily = FontFamily.Monospace,
             fontSize = 11.sp,
             fontWeight = FontWeight.Bold,
             letterSpacing = 0.sp,
             maxLines = 1,
-            overflow = TextOverflow.Ellipsis,
-            textAlign = TextAlign.Center,
+        )
+    }
+}
+
+@Composable
+private fun PixelDrawerToggleButton(
+    expanded: Boolean,
+    enabled: Boolean,
+    palette: HomePalette,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    val interactionSource = remember { MutableInteractionSource() }
+    val pressed by interactionSource.collectIsPressedAsState()
+    Box(
+        modifier = modifier
+            .height(36.dp)
+            .sizeIn(minWidth = 44.dp)
+            .alpha(if (enabled) 1f else 0.48f)
+            .background(
+                when {
+                    !enabled -> palette.surface
+                    pressed -> ClaudeClayInteractive
+                    else -> ClaudeClay
+                },
+                RectangleShape,
+            )
+            .border(BorderStroke(2.dp, if (enabled) ClaudeClayInteractive else palette.outline), RectangleShape)
+            .clickable(
+                enabled = enabled,
+                interactionSource = interactionSource,
+                indication = null,
+                onClick = onClick,
+            )
+            .padding(horizontal = 8.dp),
+        contentAlignment = Alignment.Center,
+    ) {
+        Icon(
+            painter = painterResource(id = R.drawable.ic_reader_drawer_toggle),
+            contentDescription = if (expanded) "HIDE TOOLS" else "SHOW TOOLS",
+            tint = if (enabled) ClaudeGray950 else palette.muted,
+            modifier = Modifier.rotate(if (expanded) 180f else 0f),
         )
     }
 }
@@ -395,10 +553,19 @@ private inline fun <reified T : Enum<T>> enumValueOrDefault(value: String?, defa
 private fun PixelReadHomePreview() {
     PixelReadTheme {
         PixelReadHomeScreen(
-            statusText = "SELECT A PDF OR EPUB",
-            statusBadge = "NO FILE",
+            statusText = "SELECT OR RESUME",
+            recentBooks = listOf(
+                RecentBookEntry(
+                    uri = "content://preview/book",
+                    title = "Design Notes",
+                    documentType = ReaderDocumentType.EPUB,
+                    lastOpenedAt = 1L,
+                    progressLabel = "CH 2/4 P 3/8",
+                ),
+            ),
             palette = homePalette(ReaderThemeMode.DARK),
             onOpenBook = {},
+            onOpenRecentBook = {},
         )
     }
 }

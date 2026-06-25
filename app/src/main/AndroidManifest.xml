@@ -13,11 +13,13 @@
         android:theme="@style/Theme.PixelRead">
         <activity
             android:name=".EpubReadiumActivity"
+            android:configChanges="keyboardHidden|orientation|screenSize"
             android:exported="false"
             android:label="@string/app_name"
             android:theme="@style/Theme.PixelRead" />
         <activity
             android:name=".PdfViewerActivity"
+            android:configChanges="keyboardHidden|orientation|screenSize"
             android:exported="false"
             android:label="@string/app_name"
             android:theme="@style/Theme.PixelRead" />
