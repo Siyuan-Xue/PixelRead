@@ -26,6 +26,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.sizeIn
 import androidx.compose.foundation.layout.systemBarsPadding
 import androidx.compose.foundation.layout.widthIn
@@ -69,6 +70,8 @@ import com.codexue.pixelread.ui.theme.PixelError
 import com.codexue.pixelread.ui.theme.PixelReadTheme
 
 private const val DeveloperCredit = "CODEX & XUE"
+private val TopBarFrameInset = 8.dp
+private val TopBarToggleSize = 36.dp
 
 private data class HomePalette(
     val background: Color,
@@ -324,8 +327,8 @@ private fun ReaderStatusBar(
             .fillMaxWidth()
             .background(palette.surface, RectangleShape)
             .border(BorderStroke(2.dp, palette.outline), RectangleShape)
-            .padding(8.dp),
-        horizontalArrangement = Arrangement.spacedBy(8.dp),
+            .padding(TopBarFrameInset),
+        horizontalArrangement = Arrangement.spacedBy(TopBarFrameInset),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Text(
@@ -454,25 +457,22 @@ private fun PixelDrawerToggleButton(
     val pressed by interactionSource.collectIsPressedAsState()
     Box(
         modifier = modifier
-            .height(36.dp)
-            .sizeIn(minWidth = 44.dp)
+            .size(TopBarToggleSize)
             .alpha(if (enabled) 1f else 0.48f)
             .background(
                 when {
-                    !enabled -> palette.surface
+                    !enabled -> palette.panel
                     pressed -> ClaudeClayInteractive
                     else -> ClaudeClay
                 },
                 RectangleShape,
             )
-            .border(BorderStroke(2.dp, if (enabled) ClaudeClayInteractive else palette.outline), RectangleShape)
             .clickable(
                 enabled = enabled,
                 interactionSource = interactionSource,
                 indication = null,
                 onClick = onClick,
-            )
-            .padding(horizontal = 8.dp),
+            ),
         contentAlignment = Alignment.Center,
     ) {
         Icon(
