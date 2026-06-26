@@ -9,6 +9,7 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -37,16 +38,20 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.rotate
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.RectangleShape
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
@@ -67,10 +72,43 @@ import com.milesxue.pixelread.ui.theme.ClaudeIvory
 import com.milesxue.pixelread.ui.theme.ClaudeOat
 import com.milesxue.pixelread.ui.theme.PixelError
 import com.milesxue.pixelread.ui.theme.PixelReadTheme
+import kotlinx.coroutines.launch
 
 private const val DeveloperCredit = "CODEX & XUE"
 private val TopBarFrameInset = 8.dp
 private val TopBarToggleSize = 36.dp
+private val FooterHeight = 24.dp
+
+private enum class UpdateUiStatus {
+    Idle,
+    Checking,
+    Latest,
+    Available,
+    Offline,
+}
+
+private data class AppUpdateUiState(
+    val status: UpdateUiStatus = UpdateUiStatus.Idle,
+    val info: AppUpdateInfo? = null,
+) {
+    val label: String?
+        get() = when (status) {
+            UpdateUiStatus.Idle -> null
+            UpdateUiStatus.Checking -> "CHECK"
+            UpdateUiStatus.Latest -> "LATEST"
+            UpdateUiStatus.Available -> "GET"
+            UpdateUiStatus.Offline -> "OFFLINE"
+        }
+
+    val contentDescription: String
+        get() = when (status) {
+            UpdateUiStatus.Idle -> "CHECK UPDATE"
+            UpdateUiStatus.Checking -> "CHECKING UPDATE"
+            UpdateUiStatus.Latest -> "LATEST VERSION"
+            UpdateUiStatus.Available -> "GET UPDATE"
+            UpdateUiStatus.Offline -> "UPDATE CHECK UNAVAILABLE"
+        }
+}
 
 private data class HomePalette(
     val background: Color,
@@ -114,9 +152,11 @@ private fun PixelReadHome(
     modifier: Modifier = Modifier,
 ) {
     val context = LocalContext.current
+    val updateScope = rememberCoroutineScope()
     val prefs = remember { context.getSharedPreferences(READER_PREFS_NAME, Context.MODE_PRIVATE) }
     var statusText by remember { mutableStateOf("SELECT OR RESUME") }
     var recentBooks by remember(refreshKey) { mutableStateOf(prefs.loadRecentBooks()) }
+    var updateUiState by remember { mutableStateOf(AppUpdateUiState()) }
     val themeMode = context.readReaderThemeMode()
     val palette = homePalette(themeMode)
     fun canOpen(uri: Uri): Boolean =
@@ -191,12 +231,41 @@ private fun PixelReadHome(
         }
     }
 
+    fun openUpdateUrl(info: AppUpdateInfo) {
+        context.startActivity(
+            Intent(Intent.ACTION_VIEW, Uri.parse(info.actionUrl)),
+        )
+    }
+
+    fun handleUpdateClick() {
+        val availableInfo = updateUiState.info
+        if (updateUiState.status == UpdateUiStatus.Available && availableInfo != null) {
+            openUpdateUrl(availableInfo)
+            return
+        }
+        if (updateUiState.status == UpdateUiStatus.Checking) return
+
+        updateUiState = AppUpdateUiState(status = UpdateUiStatus.Checking)
+        updateScope.launch {
+            updateUiState = when (val result = checkPixelReadUpdate(BuildConfig.VERSION_NAME)) {
+                is AppUpdateCheckResult.Available -> AppUpdateUiState(
+                    status = UpdateUiStatus.Available,
+                    info = result.info,
+                )
+                AppUpdateCheckResult.Current -> AppUpdateUiState(status = UpdateUiStatus.Latest)
+                AppUpdateCheckResult.Unavailable -> AppUpdateUiState(status = UpdateUiStatus.Offline)
+            }
+        }
+    }
+
     PixelReadHomeScreen(
         statusText = statusText,
         recentBooks = recentBooks,
         palette = palette,
         onOpenBook = openBook,
         onOpenRecentBook = openRecentBook,
+        updateUiState = updateUiState,
+        onUpdateClick = ::handleUpdateClick,
         modifier = modifier,
     )
 }
@@ -208,6 +277,8 @@ private fun PixelReadHomeScreen(
     palette: HomePalette,
     onOpenBook: () -> Unit,
     onOpenRecentBook: (RecentBookEntry) -> Unit,
+    updateUiState: AppUpdateUiState,
+    onUpdateClick: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     Column(
@@ -274,19 +345,25 @@ private fun PixelReadHomeScreen(
                 }
             }
         }
-        PixelReadFooter(palette = palette)
+        PixelReadFooter(
+            palette = palette,
+            updateUiState = updateUiState,
+            onUpdateClick = onUpdateClick,
+        )
     }
 }
 
 @Composable
 private fun PixelReadFooter(
     palette: HomePalette,
+    updateUiState: AppUpdateUiState,
+    onUpdateClick: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     Row(
         modifier = modifier
             .fillMaxWidth()
-            .height(14.dp),
+            .height(FooterHeight),
         horizontalArrangement = Arrangement.spacedBy(12.dp, Alignment.CenterHorizontally),
         verticalAlignment = Alignment.CenterVertically,
     ) {
@@ -309,6 +386,103 @@ private fun PixelReadFooter(
             maxLines = 1,
             overflow = TextOverflow.Ellipsis,
             textAlign = TextAlign.End,
+        )
+        UpdateMark(
+            state = updateUiState,
+            onClick = onUpdateClick,
+            idleColor = palette.muted,
+            activeColor = palette.primary,
+            errorColor = PixelError,
+        )
+    }
+}
+
+@Composable
+private fun UpdateMark(
+    state: AppUpdateUiState,
+    onClick: () -> Unit,
+    idleColor: Color,
+    activeColor: Color,
+    errorColor: Color,
+    modifier: Modifier = Modifier,
+) {
+    val interactionSource = remember { MutableInteractionSource() }
+    val pressed by interactionSource.collectIsPressedAsState()
+    val color = when (state.status) {
+        UpdateUiStatus.Available -> activeColor
+        UpdateUiStatus.Offline -> errorColor
+        else -> idleColor
+    }
+    val displayColor = if (pressed && state.status != UpdateUiStatus.Checking) activeColor else color
+
+    Row(
+        modifier = modifier.height(FooterHeight),
+        horizontalArrangement = Arrangement.spacedBy(4.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Box(
+            modifier = Modifier
+                .size(24.dp)
+                .clickable(
+                    enabled = state.status != UpdateUiStatus.Checking,
+                    interactionSource = interactionSource,
+                    indication = null,
+                    onClick = onClick,
+                )
+                .semantics { contentDescription = state.contentDescription },
+            contentAlignment = Alignment.Center,
+        ) {
+            UpdateGlyph(
+                color = displayColor,
+                modifier = Modifier.size(14.dp),
+            )
+        }
+        state.label?.let { label ->
+            Text(
+                text = label,
+                color = displayColor,
+                fontFamily = FontFamily.Monospace,
+                fontSize = 8.sp,
+                fontWeight = FontWeight.SemiBold,
+                letterSpacing = 0.sp,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
+        }
+    }
+}
+
+@Composable
+private fun UpdateGlyph(
+    color: Color,
+    modifier: Modifier = Modifier,
+) {
+    Canvas(modifier = modifier) {
+        val strokeWidth = 1.5.dp.toPx()
+        val centerX = size.width / 2f
+        drawLine(
+            color = color,
+            start = Offset(centerX, 1.dp.toPx()),
+            end = Offset(centerX, 9.dp.toPx()),
+            strokeWidth = strokeWidth,
+        )
+        drawLine(
+            color = color,
+            start = Offset(centerX, 9.dp.toPx()),
+            end = Offset(3.dp.toPx(), 5.dp.toPx()),
+            strokeWidth = strokeWidth,
+        )
+        drawLine(
+            color = color,
+            start = Offset(centerX, 9.dp.toPx()),
+            end = Offset(11.dp.toPx(), 5.dp.toPx()),
+            strokeWidth = strokeWidth,
+        )
+        drawLine(
+            color = color,
+            start = Offset(2.dp.toPx(), 12.dp.toPx()),
+            end = Offset(12.dp.toPx(), 12.dp.toPx()),
+            strokeWidth = strokeWidth,
         )
     }
 }
@@ -554,6 +728,8 @@ private fun PixelReadHomePreview() {
             palette = homePalette(ReaderThemeMode.DARK),
             onOpenBook = {},
             onOpenRecentBook = {},
+            updateUiState = AppUpdateUiState(status = UpdateUiStatus.Available),
+            onUpdateClick = {},
         )
     }
 }

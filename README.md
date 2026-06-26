@@ -13,6 +13,7 @@ Developer identity: CODEX & XUE.
 - Switch between dark and light reading themes based on the project color tokens
 - Keep reader controls in a collapsible top drawer
 - Resume recent PDF and EPUB books from the empty home screen
+- Check GitHub Releases manually from the small update icon beside the product identity
 - View short empty, loading, and error states
 
 ## Tech Stack
@@ -39,16 +40,16 @@ Release signing is configured through the local, untracked `signing/release-sign
 The signed private release APK is copied to:
 
 ```text
-app/build/outputs/apk/release/PixelRead-1.0.0-release.apk
+app/build/outputs/apk/release/PixelRead-1.1.0-release.apk
 ```
 
 ## Install With ADB
 
-For the first private 1.0 release, uninstall the old prototype package before installing:
+If the old prototype package is still installed, uninstall it before installing:
 
 ```powershell
 adb uninstall com.codexue.pixelread
-adb install -r app/build/outputs/apk/release/PixelRead-1.0.0-release.apk
+adb install -r app/build/outputs/apk/release/PixelRead-1.1.0-release.apk
 ```
 
 The formal package name is:
@@ -59,4 +60,4 @@ com.milesxue.pixelread
 
 ## Status
 
-Private 1.0 release.
+Private 1.1 release.
