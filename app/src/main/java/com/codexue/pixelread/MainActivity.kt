@@ -7,7 +7,6 @@ import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
-import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
@@ -88,7 +87,7 @@ class MainActivity : ComponentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        enableEdgeToEdge()
+        applyPixelReadSystemBars(readReaderThemeMode())
         setContent {
             val refreshKey = resumeVersion
             PixelReadTheme {
@@ -105,6 +104,7 @@ class MainActivity : ComponentActivity() {
     override fun onResume() {
         super.onResume()
         resumeVersion += 1
+        applyPixelReadSystemBars(readReaderThemeMode())
     }
 }
 
@@ -117,10 +117,7 @@ private fun PixelReadHome(
     val prefs = remember { context.getSharedPreferences(READER_PREFS_NAME, Context.MODE_PRIVATE) }
     var statusText by remember { mutableStateOf("SELECT OR RESUME") }
     var recentBooks by remember(refreshKey) { mutableStateOf(prefs.loadRecentBooks()) }
-    val themeMode = enumValueOrDefault(
-        prefs.getString("themeMode", null),
-        ReaderThemeMode.DARK,
-    )
+    val themeMode = context.readReaderThemeMode()
     val palette = homePalette(themeMode)
     fun canOpen(uri: Uri): Boolean =
         runCatching {
@@ -459,14 +456,6 @@ private fun PixelDrawerToggleButton(
         modifier = modifier
             .size(TopBarToggleSize)
             .alpha(if (enabled) 1f else 0.48f)
-            .background(
-                when {
-                    !enabled -> palette.panel
-                    pressed -> ClaudeClayInteractive
-                    else -> ClaudeClay
-                },
-                RectangleShape,
-            )
             .clickable(
                 enabled = enabled,
                 interactionSource = interactionSource,
@@ -478,8 +467,10 @@ private fun PixelDrawerToggleButton(
         Icon(
             painter = painterResource(id = R.drawable.ic_reader_drawer_toggle),
             contentDescription = if (expanded) "HIDE TOOLS" else "SHOW TOOLS",
-            tint = if (enabled) ClaudeGray950 else palette.muted,
-            modifier = Modifier.rotate(if (expanded) 180f else 0f),
+            tint = if (pressed && enabled) ClaudeClayInteractive else palette.primary,
+            modifier = Modifier
+                .size(28.dp)
+                .rotate(if (expanded) 180f else 0f),
         )
     }
 }
@@ -544,9 +535,6 @@ private fun homePalette(themeMode: ReaderThemeMode): HomePalette =
             primary = ClaudeClay,
         )
     }
-
-private inline fun <reified T : Enum<T>> enumValueOrDefault(value: String?, default: T): T =
-    enumValues<T>().firstOrNull { it.name == value } ?: default
 
 @Preview(showBackground = true, widthDp = 390, heightDp = 844)
 @Composable

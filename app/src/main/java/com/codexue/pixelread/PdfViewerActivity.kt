@@ -21,7 +21,6 @@ import android.widget.LinearLayout
 import android.widget.SeekBar
 import android.widget.TextView
 import androidx.activity.result.contract.ActivityResultContracts
-import androidx.activity.enableEdgeToEdge
 import androidx.core.view.ViewCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.fragment.app.FragmentActivity
@@ -61,7 +60,6 @@ class PdfViewerActivity : FragmentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        enableEdgeToEdge()
         themeMode = enumValueOrDefault(prefs.getString("themeMode", null), ReaderThemeMode.DARK)
         currentPageIndex = savedInstanceState?.getInt(StatePdfPageIndex)
             ?: intent.getIntExtra(EXTRA_INITIAL_PDF_PAGE_INDEX, 0)
@@ -92,18 +90,19 @@ class PdfViewerActivity : FragmentActivity() {
 
         statusPanel = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
-            setPadding(dp(8), dp(4), dp(8), dp(4))
+            setPadding(dp(4), dp(4), dp(4), dp(4))
         }
         val statusInfoRow = LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL
             gravity = Gravity.CENTER_VERTICAL
         }
         statusText = label("OPENING PDF", 14f, bold = true)
+        statusText.setPadding(dp(4), 0, 0, 0)
         statusBadge = badge("LOADING")
         drawerToggleButton = iconButton { toggleDrawer() }
         fontIcon = ImageView(this).apply {
             scaleType = ImageView.ScaleType.CENTER
-            setPadding(dp(8), dp(8), dp(8), dp(8))
+            setPadding(0, 0, 0, 0)
             contentDescription = "FONT SIZE"
         }
         fontSlider = SeekBar(this).apply {
@@ -240,6 +239,7 @@ class PdfViewerActivity : FragmentActivity() {
     }
 
     private fun applyTheme() {
+        applyPixelReadSystemBars(themeMode)
         val tokens = readerThemeTokens(themeMode)
         root.setBackgroundColor(tokens.background.toInt())
         textViews.forEach { it.setTextColor(tokens.text.toInt()) }
@@ -253,27 +253,30 @@ class PdfViewerActivity : FragmentActivity() {
 
     private fun updateControls() {
         val tokens = readerThemeTokens(themeMode)
-        drawerToggleButton.background = pixelBackground(tokens.primary.toInt(), tokens.muted.toInt(), strokeDp = 2)
+        drawerToggleButton.setBackgroundColor(android.graphics.Color.TRANSPARENT)
         drawerToggleButton.setImageResource(R.drawable.ic_reader_drawer_toggle)
-        drawerToggleButton.setColorFilter(tokens.background.toInt())
+        drawerToggleButton.setColorFilter(tokens.primary.toInt())
         drawerToggleButton.rotation = if (drawerExpanded) 180f else 0f
         drawerToggleButton.contentDescription = if (drawerExpanded) "HIDE TOOLS" else "SHOW TOOLS"
         fontIcon.setImageResource(R.drawable.ic_reader_font_size)
-        fontIcon.setColorFilter(tokens.outline.toInt())
-        fontIcon.alpha = DisabledControlAlpha
+        fontIcon.setBackgroundColor(android.graphics.Color.TRANSPARENT)
+        fontIcon.setColorFilter(tokens.text.toInt())
+        fontIcon.alpha = 1f
         val disabledTint = ColorStateList.valueOf(tokens.outline.toInt())
         fontSlider.progressTintList = disabledTint
         fontSlider.thumbTintList = disabledTint
         fontSlider.progressBackgroundTintList = disabledTint
-        openBookButton.background = pixelBackground(tokens.surface.toInt(), tokens.outline.toInt(), strokeDp = 2)
+        openBookButton.setBackgroundColor(android.graphics.Color.TRANSPARENT)
         openBookButton.setImageResource(R.drawable.ic_reader_open_book)
         openBookButton.setColorFilter(tokens.primary.toInt())
+        openBookButton.alpha = 1f
         openBookButton.contentDescription = "OPEN BOOK"
-        themeToggleButton.background = pixelBackground(tokens.surface.toInt(), tokens.outline.toInt(), strokeDp = 2)
+        themeToggleButton.setBackgroundColor(android.graphics.Color.TRANSPARENT)
         themeToggleButton.setImageResource(
             if (themeMode == ReaderThemeMode.DARK) R.drawable.ic_reader_moon else R.drawable.ic_reader_sun,
         )
         themeToggleButton.setColorFilter(tokens.primary.toInt())
+        themeToggleButton.alpha = 1f
         themeToggleButton.contentDescription = "TOGGLE THEME"
     }
 
@@ -339,7 +342,7 @@ class PdfViewerActivity : FragmentActivity() {
         ImageButton(this).apply {
             isClickable = true
             scaleType = ImageView.ScaleType.CENTER
-            setPadding(dp(8), dp(8), dp(8), dp(8))
+            setPadding(0, 0, 0, 0)
             setBackgroundColor(android.graphics.Color.TRANSPARENT)
             setOnClickListener { onClick() }
         }
