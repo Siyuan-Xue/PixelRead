@@ -34,6 +34,7 @@ import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -72,12 +73,14 @@ import com.milesxue.pixelread.ui.theme.ClaudeIvory
 import com.milesxue.pixelread.ui.theme.ClaudeOat
 import com.milesxue.pixelread.ui.theme.PixelError
 import com.milesxue.pixelread.ui.theme.PixelReadTheme
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
 private const val DeveloperCredit = "CODEX & XUE"
 private val TopBarFrameInset = 8.dp
 private val TopBarToggleSize = 36.dp
 private val FooterHeight = 24.dp
+private const val UpdateStatusVisibleMillis = 3_000L
 
 private enum class UpdateUiStatus {
     Idle,
@@ -159,6 +162,22 @@ private fun PixelReadHome(
     var updateUiState by remember { mutableStateOf(AppUpdateUiState()) }
     val themeMode = context.readReaderThemeMode()
     val palette = homePalette(themeMode)
+
+    LaunchedEffect(updateUiState.status, updateUiState.info?.version) {
+        when (updateUiState.status) {
+            UpdateUiStatus.Latest,
+            UpdateUiStatus.Available,
+            -> {
+                delay(UpdateStatusVisibleMillis)
+                updateUiState = AppUpdateUiState()
+            }
+            UpdateUiStatus.Idle,
+            UpdateUiStatus.Checking,
+            UpdateUiStatus.Offline,
+            -> Unit
+        }
+    }
+
     fun canOpen(uri: Uri): Boolean =
         runCatching {
             context.contentResolver.openFileDescriptor(uri, "r")?.use { true } == true
