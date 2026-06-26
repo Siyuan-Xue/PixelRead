@@ -1,4 +1,4 @@
-package com.codexue.pixelread
+package com.milesxue.pixelread
 
 import android.content.SharedPreferences
 

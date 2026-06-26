@@ -1,8 +1,10 @@
-PixelRead v0.3.1 is a bug-fix debug build that republishes the polished reader chrome with the corrected versioned APK metadata.
+PixelRead v1.0.0 is the first private signed release for direct APK distribution.
 
 Highlights:
-- Keeps the compact reader drawer, recent-book resume, and PDF/EPUB progress restoration from the 0.3 series.
-- Ships the current top-bar spacing, unboxed drawer icons, and clay drawer toggle as a patch release.
-- Updates the debug APK name and README install path to `PixelRead-0.3.1-debug.apk`.
+- Moves the formal app identity to `com.milesxue.pixelread`.
+- Ships as a signed release APK instead of a debug build.
+- Keeps the PDF/EPUB reader, recent-book resume, reader drawer, text sizing, and theme behavior from the prototype series.
 
-The attached APK is a debug build for testing and demo use.
+Install note: uninstall the old `com.codexue.pixelread` prototype build before installing this private release.
+
+CODEX & XUE

@@ -1,4 +1,4 @@
-package com.codexue.pixelread
+package com.milesxue.pixelread
 
 import android.content.Context
 import android.graphics.pdf.PdfRenderer

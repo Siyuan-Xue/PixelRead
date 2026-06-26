@@ -1,4 +1,4 @@
-package com.codexue.pixelread.ui.theme
+package com.milesxue.pixelread.ui.theme
 
 import androidx.compose.material3.Typography
 import androidx.compose.ui.text.TextStyle

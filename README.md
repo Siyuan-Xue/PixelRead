@@ -1,6 +1,6 @@
 # PixelRead
 
-PixelRead is a small Android ebook reader built as a quiet, pixel-style utility for phone and tablet reading.
+PixelRead is a private Android ebook reader built as a quiet, pixel-style utility for phone and tablet reading.
 
 Developer identity: CODEX & XUE.
 
@@ -31,21 +31,32 @@ From the project root:
 
 ```powershell
 .\gradlew.bat :app:testDebugUnitTest
-.\gradlew.bat :app:assembleDebug
+.\gradlew.bat :app:assembleRelease
 ```
 
-The debug APK is copied to:
+Release signing is configured through the local, untracked `signing/release-signing.properties` file.
+
+The signed private release APK is copied to:
 
 ```text
-app/build/outputs/apk/debug/PixelRead-0.3.1-debug.apk
+app/build/outputs/apk/release/PixelRead-1.0.0-release.apk
 ```
 
 ## Install With ADB
 
+For the first private 1.0 release, uninstall the old prototype package before installing:
+
 ```powershell
-adb install -r app/build/outputs/apk/debug/PixelRead-0.3.1-debug.apk
+adb uninstall com.codexue.pixelread
+adb install -r app/build/outputs/apk/release/PixelRead-1.0.0-release.apk
+```
+
+The formal package name is:
+
+```text
+com.milesxue.pixelread
 ```
 
 ## Status
 
-MVP prototype.
+Private 1.0 release.

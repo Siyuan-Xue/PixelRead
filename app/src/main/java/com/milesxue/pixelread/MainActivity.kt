@@ -1,4 +1,4 @@
-package com.codexue.pixelread
+package com.milesxue.pixelread
 
 import android.content.Context
 import android.content.Intent
@@ -54,19 +54,19 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.codexue.pixelread.ui.theme.ClaudeClay
-import com.codexue.pixelread.ui.theme.ClaudeClayInteractive
-import com.codexue.pixelread.ui.theme.ClaudeGray050
-import com.codexue.pixelread.ui.theme.ClaudeGray100
-import com.codexue.pixelread.ui.theme.ClaudeGray300
-import com.codexue.pixelread.ui.theme.ClaudeGray600
-import com.codexue.pixelread.ui.theme.ClaudeGray800
-import com.codexue.pixelread.ui.theme.ClaudeGray850
-import com.codexue.pixelread.ui.theme.ClaudeGray950
-import com.codexue.pixelread.ui.theme.ClaudeIvory
-import com.codexue.pixelread.ui.theme.ClaudeOat
-import com.codexue.pixelread.ui.theme.PixelError
-import com.codexue.pixelread.ui.theme.PixelReadTheme
+import com.milesxue.pixelread.ui.theme.ClaudeClay
+import com.milesxue.pixelread.ui.theme.ClaudeClayInteractive
+import com.milesxue.pixelread.ui.theme.ClaudeGray050
+import com.milesxue.pixelread.ui.theme.ClaudeGray100
+import com.milesxue.pixelread.ui.theme.ClaudeGray300
+import com.milesxue.pixelread.ui.theme.ClaudeGray600
+import com.milesxue.pixelread.ui.theme.ClaudeGray800
+import com.milesxue.pixelread.ui.theme.ClaudeGray850
+import com.milesxue.pixelread.ui.theme.ClaudeGray950
+import com.milesxue.pixelread.ui.theme.ClaudeIvory
+import com.milesxue.pixelread.ui.theme.ClaudeOat
+import com.milesxue.pixelread.ui.theme.PixelError
+import com.milesxue.pixelread.ui.theme.PixelReadTheme
 
 private const val DeveloperCredit = "CODEX & XUE"
 private val TopBarFrameInset = 8.dp
